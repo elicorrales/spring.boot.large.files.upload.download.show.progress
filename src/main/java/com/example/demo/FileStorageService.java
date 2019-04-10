@@ -60,12 +60,18 @@ public class FileStorageService {
 		
 		ServletFileUpload upload = new ServletFileUpload();
 
-		Path targetDirectory = Files.createDirectory(this.storageLocation.resolve(sessionId));
+		Path targetDirectory = this.storageLocation.resolve(sessionId);
+		if (!Files.exists(targetDirectory)) {
+			Files.createDirectory(targetDirectory);
+		}
 		
 		FileItemIterator iter = upload.getItemIterator(request);
 		while (iter.hasNext()) {
 			FileItemStream item = iter.next();
 			String fileName = item.getName();
+			if (!item.getFieldName().equals("file")) {
+				throw new RuntimeException("Missing 'file' parameter in body");
+			}
 			System.err.println("\t\tname:"+fileName);
 			if  (fileName.contains("..")) {
 				statuses.addFileStatus(fileName,"Sorry! This file contains invalid path");
@@ -109,12 +115,10 @@ public class FileStorageService {
 			return statuses;
 		}
 
-		Stream<Path> files = Files.list(targetDirectory);
-
-		files.forEach((f) -> {
-			File file = f.getFileName().toFile();
-			System.out.println("filename:" + file.getName());
-			statuses.addFileStatus(file.getName(), "present");
+		File dir = targetDirectory.toFile();
+		Stream.of(dir.list()).forEach((f) -> {
+			File file = new File(dir.getPath()+"/"+f);
+			statuses.addFileStatus(file.getName(), "isfil:"+file.isFile() +" isdir:"+file.isDirectory()+" : "+file.length());
 		});
 
 		return statuses;
