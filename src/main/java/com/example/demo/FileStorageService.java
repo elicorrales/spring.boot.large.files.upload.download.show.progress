@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,14 +9,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Enumeration;
+import java.util.stream.Stream;
 
 import javax.servlet.http.HttpServletRequest;
 
 import org.apache.tomcat.util.http.fileupload.FileItemIterator;
 import org.apache.tomcat.util.http.fileupload.FileItemStream;
-import org.apache.tomcat.util.http.fileupload.FileUploadException;
 import org.apache.tomcat.util.http.fileupload.servlet.ServletFileUpload;
+import org.apache.tomcat.util.http.fileupload.util.Streams;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,119 +24,103 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class FileStorageService {
 
-	private final Path publicFinalFileStorageLocation;
+	private final Path storageLocation;
 	
 	
 	@Autowired
 	public FileStorageService(FileStorageProperties fileStorageProps) throws IOException {
-		this.publicFinalFileStorageLocation =
+		this.storageLocation =
 				Paths.get(fileStorageProps.getUploadDir())
 					.toAbsolutePath().normalize();
 	
-		if (!Files.exists(this.publicFinalFileStorageLocation)) {
-			Files.createDirectory(this.publicFinalFileStorageLocation);
+		if (!Files.exists(this.storageLocation)) {
+			Files.createDirectory(this.storageLocation);
 		}
 	}
 
 	public String storeFile(MultipartFile file) throws IOException {
 
-		String n = file.getName();
 		String fileName = file.getOriginalFilename();
 		if  (fileName.contains("..")) {
 			throw new FileStorageException("Sorry! This file contains invalid path: [ " + fileName + " ] ");
 		}
-		
-		Path targetLocation = this.publicFinalFileStorageLocation.resolve(fileName);
+
+		Path targetLocation = this.storageLocation.resolve(fileName);
 		Files.copy(file.getInputStream(),targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
 		return fileName;
 	}
 
 
-	public String storeFile2(MultipartFile file) throws IOException {
+	public FilesUploadsStatuses storeFiles(String sessionId, HttpServletRequest request) throws Exception {
 
-		System.err.println("\n\nEvaluating incoming upload request....");
+		System.err.println("\tEvaluating incoming upload request....");
 
-		String n = file.getName();
-		String fileName = file.getOriginalFilename();
-		if  (fileName.contains("..")) {
-			throw new FileStorageException("Sorry! This file contains invalid path: [ " + fileName + " ] ");
-		}
-	
-		Path targetLocation = this.publicFinalFileStorageLocation.resolve(fileName);
-
-		byte[] buffer = new byte[4096];
+		FilesUploadsStatuses statuses = new FilesUploadsStatuses();
 		
-		OutputStream out = new FileOutputStream(targetLocation.toFile());
-		InputStream  in  = file.getInputStream();
-	
-		System.err.println("\n\nbegin copying input file stream to output file stream....");
-
-		int bytesRead = 0;
-		while ((bytesRead=in.read(buffer))!=-1) {
-			System.err.print(".");
-			out.write(buffer, 0, bytesRead);
-		}
-
-		System.err.println("\n\nDone copying ");
-
-		in.close();
-		out.close();
-
-		//Files.copy(file.getInputStream(),targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-		return fileName;
-	}
-
-
-	public String storeFile3(HttpServletRequest request) throws Exception {
-
-		System.err.println("\n\nEvaluating incoming upload request....");
-
-		Path targetLocation = this.publicFinalFileStorageLocation.resolve("TempFile");
-
 		ServletFileUpload upload = new ServletFileUpload();
+
+		Path targetDirectory = Files.createDirectory(this.storageLocation.resolve(sessionId));
 		
 		FileItemIterator iter = upload.getItemIterator(request);
 		while (iter.hasNext()) {
 			FileItemStream item = iter.next();
-			System.err.println("name:"+item.getName());
-			System.err.println("field:"+item.getFieldName());
-			System.err.println("type:"+item.getContentType());
-			System.err.println("headers"+item.getHeaders());
-			InputStream in = item.openStream();
-			OutputStream out = new FileOutputStream(targetLocation.toFile());
-			System.err.println("\n\nbegin copying input file stream to output file stream....");
-			byte[] buffer = new byte[4096];
-			int bytesRead = 0;
-			while ((bytesRead=in.read(buffer))!=-1) {
-				out.write(buffer, 0, bytesRead);
+			String fileName = item.getName();
+			System.err.println("\t\tname:"+fileName);
+			if  (fileName.contains("..")) {
+				statuses.addFileStatus(fileName,"Sorry! This file contains invalid path");
 			}
-			System.err.println("\n\nDone copying ");
-			in.close();
-			out.close();
+			InputStream in = item.openStream();
+			Path targetLocation = targetDirectory.resolve(fileName);
+			OutputStream out = new FileOutputStream(targetLocation.toFile());
+			if (!item.isFormField()) {
+				System.err.println("\t\tbegin copying input file stream to output file stream....");
+				byte[] buffer = new byte[4096];
+				int bytesRead = 0;
+				while ((bytesRead=in.read(buffer))!=-1) {
+					out.write(buffer, 0, bytesRead);
+				}
+				System.err.println("\t\tDone copying ");
+			} else {
+				System.err.println("form field from input stream: " + Streams.asString(in));
+			}
+
+			try {in.close(); } catch (Exception e) {}
+			try {out.close(); } catch (Exception e) {}
+			System.err.println("\t\tclosed streams");
+			statuses.addFileStatus(fileName, "uploaded");
 		}
 
-/*
-		InputStream  in  = request.getInputStream();
-		OutputStream out = new FileOutputStream(targetLocation.toFile());
-	
-		System.err.println("\n\nbegin copying input file stream to output file stream....");
 
-		byte[] buffer = new byte[4096];
-		int bytesRead = 0;
-		while ((bytesRead=in.read(buffer))!=-1) {
-			out.write(buffer, 0, bytesRead);
-		}
-
-		System.err.println("\n\nDone copying ");
-
-		in.close();
-		out.close();
-*/
-
-		return "TempFile";
+		return statuses;
 	}
+
+
+	public FilesUploadsStatuses getUploadStatus(String sessionId) throws Exception {
+
+		System.err.println("\tEvaluating incoming upload request....");
+
+		FilesUploadsStatuses statuses = new FilesUploadsStatuses();
+		
+		Path targetDirectory = this.storageLocation.resolve(sessionId);
+		
+		if (!Files.exists(this.storageLocation.resolve(sessionId))) {
+			statuses.setOverallMessage("Directory " + targetDirectory + " does not exist");
+			return statuses;
+		}
+
+		Stream<Path> files = Files.list(targetDirectory);
+
+		files.forEach((f) -> {
+			File file = f.getFileName().toFile();
+			System.out.println("filename:" + file.getName());
+			statuses.addFileStatus(file.getName(), "present");
+		});
+
+		return statuses;
+	}
+
+
 
 
 

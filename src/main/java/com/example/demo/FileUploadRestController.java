@@ -1,36 +1,31 @@
 package com.example.demo;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.tomcat.util.http.fileupload.servlet.ServletFileUpload;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.MultipartHttpServletRequest;
-import org.springframework.web.multipart.MultipartResolver;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 //@RequestMapping("/")
 public class FileUploadRestController {
 
-	private  static final Logger logger = LoggerFactory.getLogger(FileUploadRestController.class);
 
 	@Autowired
 	private FileStorageService service;
 	
-	public RootResponse hello() {
+	public RootResponse hello(HttpServletRequest request, HttpServletResponse response) {
 		return new RootResponse("This is a File Upload Service");
 	}
 
@@ -70,64 +65,88 @@ public class FileUploadRestController {
 	 * the essential problem is that this request's parameter is a multipart file, which means that
 	 * Spring has alread intercepted / handled this before we arrive here.
 	 */
-	@PostMapping("/file")
-	public FileUploadResponse uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
+	@PostMapping("/simplefileupload")
+	public SimpleFileUploadResponse uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
 
-		System.err.println("\n\nSTART of  /file upload\n\n\n");
+		System.err.println("\n\nSTART of  /simplefileupload \n\n\n");
 
-		String fileName = service.storeFile(file);
-		
-		String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
-				.path("/files/")
-				.path(fileName)
-				.toUriString();
-		
-		return new FileUploadResponse(fileName, fileDownloadUri,
-				file.getContentType(), file.getSize());
+		String name = service.storeFile(file);
 
+		return new SimpleFileUploadResponse(name,file.getSize());
 	}
 
-	/**********************************************************************************************
-	 * this approach has all the same failings and problems as the first(above) approach.
-	 * the only positive in this approach, that perhaps could be used elsewhere with another way,
-	 * is that instead of using Files.copy(), we copy input stream to output stream, using a buffer
-	 * of size that we choose.  this means we could add in some monitoring of progress.
-	 */
-	@PostMapping("/file2")
-	public FileUploadResponse uploadFile2(@RequestParam("file") MultipartFile file) throws IOException {
 
-		System.err.println("\n\nSTART of  /file2 upload\n\n\n");
+	@PostMapping("/betterfileupload")
+	public FilesUploadsStatuses uploadFile2(HttpServletRequest request, HttpServletResponse response) throws Exception {
 
-		String fileName = service.storeFile2(file);
+		System.err.println("\n\nSTART of  /betterfileupload");
 		
-		String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
-				.path("/files/")
-				.path(fileName)
-				.toUriString();
+		UUID uuid = UUID.randomUUID();
+		response.addHeader("SESSIONID", uuid.toString());
+
+		System.err.println("\tuuid="+uuid);
 		
-		return new FileUploadResponse(fileName, fileDownloadUri,
-				file.getContentType(), file.getSize());
-
-	}
-
-	
-
-	@PostMapping("/file3")
-	public FileUploadResponse uploadFile3(HttpServletRequest request, HttpServletResponse response) throws Exception {
-
-		System.err.println("\n\nSTART of  /file3 upload\n\n\n");
+		FilesUploadsStatuses results = null;
 
 		if (ServletFileUpload.isMultipartContent(request)) {
 
-			System.err.println("\n\n\n file upload version 3 - request is multipart...\n\n\n");
+			System.err.println("\tfile upload version 3 - request is multipart");
 
-			service.storeFile3(request);
+			results = service.storeFiles(uuid.toString(),request);
 					
+		} else {
+			throw new RuntimeException("/file3 request is not multipart file");
 		};
 	
-		return new FileUploadResponse("FileName", "URI", "ContentType", 100);
+		return results;
 
 	}
 
+
+	@GetMapping("/sessionid")
+	public FilesUploadsIdentifier sessionId() {
+		UUID uuid = UUID.randomUUID();
+		FilesUploadsIdentifier identifier = new FilesUploadsIdentifier(uuid.toString());
+		return identifier;
+	}
+
+	@PostMapping("/muchbetterfileupload")
+	public FilesUploadsStatuses uploadFile3(HttpServletRequest httpreq, HttpServletResponse httpres) throws Exception {
+
+		System.err.println("\n\nSTART of  /muchbetterfileupload");
+		
+		
+		String sessionId = httpreq.getHeader("SESSIONID");
+		if (sessionId == null) {
+			throw new RuntimeException("Missing SESSIONID");
+		}
+
+		FilesUploadsStatuses statuses = null;
+		if (ServletFileUpload.isMultipartContent(httpreq)) {
+
+			System.err.println("\tfile upload version 3 - request is multipart");
+
+			statuses = service.storeFiles(sessionId,httpreq);
+	
+
+		} else {
+			throw new RuntimeException("/file3 request is not multipart file");
+		};
+	
+		return statuses;
+
+	}
+
+
+	@GetMapping("/uploadprogress")
+	public FilesUploadsStatuses progress(HttpServletRequest httpreq, HttpServletResponse httpres) throws Exception {
+		String sessionId = httpreq.getHeader("SESSIONID");
+		if (sessionId == null) {
+			throw new RuntimeException("Missing SESSIONID");
+		}
+
+		FilesUploadsStatuses statuses = service.getUploadStatus(sessionId);
+		return statuses;
+	}
 
 }
