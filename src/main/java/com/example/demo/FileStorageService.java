@@ -47,15 +47,15 @@ public class FileStorageService {
 			String fileName = file.getOriginalFilename();
 			if  (fileName.contains("..")) {
 				String message = "Sorry! This file contains invalid path";
-				statuses.addFileStatus(fileName, message);
+				statuses.addFileStatus(fileName, 0, message);
 			} else {
 				Path targetLocation = this.storageLocation.resolve(fileName);
 				try {
 					Files.copy(file.getInputStream(),targetLocation, StandardCopyOption.REPLACE_EXISTING);
-					statuses.addFileStatus(fileName, "Uploaded:"+file.getSize());
+					statuses.addFileStatus(fileName, file.getSize(), "Uploaded");
 				} catch (Exception e) {
 					e.printStackTrace();
-					statuses.addFileStatus(fileName, e.getMessage());
+					statuses.addFileStatus(fileName, file.getSize(), e.getMessage());
 				}
 			}
 		}); 
@@ -86,27 +86,42 @@ public class FileStorageService {
 			}
 			System.err.println("\t\tname:"+fileName);
 			if  (fileName.contains("..")) {
-				statuses.addFileStatus(fileName,"Sorry! This file contains invalid path");
+				statuses.addFileStatus(fileName, -1, "Sorry! This file contains invalid path");
+				continue;
 			}
-			InputStream in = item.openStream();
-			Path targetLocation = targetDirectory.resolve(fileName);
-			OutputStream out = new FileOutputStream(targetLocation.toFile());
-			if (!item.isFormField()) {
-				System.err.println("\t\tbegin copying input file stream to output file stream....");
-				byte[] buffer = new byte[4096];
-				int bytesRead = 0;
-				while ((bytesRead=in.read(buffer))!=-1) {
-					out.write(buffer, 0, bytesRead);
+			long totalBytes = 0;
+			InputStream in = null;
+			OutputStream out = null;
+			try {
+				in = item.openStream();
+				Path targetLocation = targetDirectory.resolve(fileName);
+				//get rid of same, previously uploaded file. this helps with showing progress to client
+				if (Files.exists(targetLocation)) { Files.delete(targetLocation);}
+				out = new FileOutputStream(targetLocation.toFile());
+				if (!item.isFormField()) {
+					System.err.println("\t\tbegin copying input file stream to output file stream....");
+					byte[] buffer = new byte[4096];
+					int bytesRead = 0;
+					while ((bytesRead=in.read(buffer))!=-1) {
+						out.write(buffer, 0, bytesRead);
+						totalBytes += bytesRead;
+					}
+					System.err.println("\t\tDone copying ");
+				} else {
+					System.err.println("form field from input stream: " + Streams.asString(in));
 				}
-				System.err.println("\t\tDone copying ");
-			} else {
-				System.err.println("form field from input stream: " + Streams.asString(in));
-			}
 
-			try {in.close(); } catch (Exception e) {}
-			try {out.close(); } catch (Exception e) {}
-			System.err.println("\t\tclosed streams");
-			statuses.addFileStatus(fileName, "uploaded");
+				System.err.println("\t\tclosed streams");
+				statuses.addFileStatus(fileName, totalBytes, "uploaded");
+			} catch (Exception e) {
+				System.err.println("ERROR during attempt to read in stream and copy...." + fileName);
+				statuses.addFileStatus(fileName, totalBytes, e.getMessage());
+				e.printStackTrace();
+				System.err.println("ERROR during attempt to read in stream and copy...." + fileName);
+			} finally {
+				try {in.close(); } catch (Exception e) {}
+				try {out.close(); } catch (Exception e) {}
+			}
 		}
 
 
@@ -132,7 +147,7 @@ public class FileStorageService {
 		if (numFiles > 0 ) {
 			Stream.of(dir.list()).forEach((f) -> {
 				File file = new File(dir.getPath()+"/"+f);
-				statuses.addFileStatus(file.getName(), ""+file.length());
+				statuses.addFileStatus(file.getName(), file.length(), "Exists On Server");
 			});
 		} else {
 			statuses.setOverallMessage("Directory " + targetDirectory + " is EMPTY");

@@ -1,62 +1,108 @@
 
 var sessionId;
-var fileList = [];
-var keepCheckingUploadStatus = false;
+var submittedFileList = {}
+var numberOfSubmittedFiles = 0;
+var keepCheckingFileUploadStatus = false;
 var timeout;
 
 const messageElem      = document.getElementById('message');
 const fileSelectorElem = document.getElementById('fileSelector');
 const fileListElem     = document.getElementById('fileList');
+const submitElem       = document.getElementById('submitBtn');
+
+submitElem.disabled = true;
 
 fileSelectorElem.addEventListener('change',() => {
-	fileList = [];
-	messageElem.innerHTML = '';
+	submittedFileList = {};
+    displayFileList();
+	numberOfSubmittedFiles = 0;
+	clearMessage();
 	let fseFiles = fileSelectorElem.files;
 	for (i=0;i<fseFiles.length;i++) {
-		fileList.push(fseFiles[i]);
+		submittedFileList[fseFiles[i].name] = fseFiles[i];
+		numberOfSubmittedFiles++;
 	}
+	if (numberOfSubmittedFiles>0) submitElem.disabled = false;
+	
 	setFilesStatuses('Selected');
 	displayFileList();
 });
 
-fileSelectorElem.addEventListener('click',() => {
-	fileList = [];
+
+const clearMessage = () => {
 	messageElem.innerHTML = '';
-	let fseFiles = fileSelectorElem.files;
-	fileListElem.innerHTML = '';
-});
+};
 
-
+const displayMessage = (message) => {
+	messageElem.innerHTML = '<h2>' + message + '</h2>';
+};
 
 const displayFileList = () => {
-	if (fileList==undefined) { return; }
+	if (submittedFileList==undefined) { return; }
 	let html = '';
-	for (i=0;i<fileList.length;i++) {
-		let file = fileList[i];
-		html += '<tr><td>' + fileList[i].name + '</td><td>' + fileList[i].size + '</td><td>' + fileList[i].status + '</td></tr>';
+	for (key in submittedFileList) {
+		let file = submittedFileList[key];
+		let isFileUploaded = file.uploadedSize && file.uploadedSize==file.size?true:false;
+		html += (isFileUploaded?'<tr style="color:white;background-color:green">':'<tr>')
+				+ '<td>' + file.name + '</td>'
+				+ '<td>' + (file.uploadedSize?file.uploadedSize:0) + '</td>'
+				+ '<td>'+  file.size  + '</td>'
+				+ '<td>' + file.status + '</td>'
+			+ '</tr>';
 	}
 	fileListElem.innerHTML = html;
 };
 
 const setFilesStatuses = (status) => {
-	if (fileList==undefined) { return; }
-	for (i=0;i<fileList.length;i++) {
-		fileList[i].status = status;
+	if (submittedFileList==undefined) { return; }
+	for (key in submittedFileList) {
+		let file = submittedFileList[key];
+		file.status = status;
+	}
+};
+
+const updateFilesStatuses = (list) => {
+	if (!submittedFileList || !list) { return; }
+	let numberOfReceivedStatuses = 0;
+	let numberOfMatches = 0;
+	for (key in list) {
+		if (submittedFileList[key]!==undefined) {
+			submittedFileList[key].uploadedSize = list[key].size;
+			submittedFileList[key].status = list[key].status;
+			numberOfReceivedStatuses++;
+			if (submittedFileList[key].size==list[key].size) {
+				numberOfMatches++;
+			}
+		}
+	}
+    displayFileList();
+	if (numberOfReceivedStatuses>=numberOfSubmittedFiles && numberOfMatches==numberOfSubmittedFiles) {
+		keepCheckingFileUploadStatus = false;
+		displayMessage('All Files Uploaded');
+		submitElem.disabled = false;
+		fileSelectorElem.disabled = false;
+		setFilesStatuses('Uploaded');
+        submittedFileList = {}
+        numberOfSubmittedFiles = 0;
+		submitElem.disabled = false;
+		fileSelectorElem.files = null;
 	}
 };
 
 
+
 const checkUploadStatus = () =>{
 
-	if (!keepCheckingUploadStatus) {
-		clearTimeout(timeout);
-		return;
+	if (!keepCheckingFileUploadStatus) {
+		return false;
 	};
 
 	axios.get('/uploadprogress',{headers:{SESSIONID:sessionId}})
 	.then(
 		result => {
-			console.log(result);
+			if (result.data && result.data.fileStatuses) {
+				updateFilesStatuses(result.data.fileStatuses);
+			}
 		}
 	)
 	.catch(
@@ -64,16 +110,36 @@ const checkUploadStatus = () =>{
 			console.log(error);
 		}
 	);
+	
+	return true;
 };
 
+const fileUploadStatusRunner = () => {
+	if (!checkUploadStatus()) {
+		return;
+	}
+	setTimeout(()=>{
+		fileUploadStatusRunner();
+	},200);
+};
 
-const doSubmit = (form,obj,event) => {
+const isSubmittedFileListEmpty = () => {
+	for (var key in submittedFileList) {
+		if (submittedFileList.hasOwnProperty(key)) return false;
+	}
+	return true;
+};
 
-	messageElem.innerHTML = '';
+const doSubmit = (event) => {
+
+	submitElem.disabled = true;
+	fileSelectorElem.disabled = true;
+	
+	clearMessage();
 	event.preventDefault();
 
-	if (!fileList || fileList.length<1) {
-		messageElem.innerHTML = '<h2>No Files Selected</h1>';
+	if (!submittedFileList || isSubmittedFileListEmpty()) {
+		displayMessage('No Files Selected');
 		return;
 	}
 
@@ -82,35 +148,38 @@ const doSubmit = (form,obj,event) => {
 	console.log(sessionId);
 	
 	const formData = new FormData();
-	fileList.forEach( f => { formData.append('file',f); });
+	for (key in submittedFileList) {
+		let file = submittedFileList[key];
+		formData.append('file',file);
+	}
 
 	setFilesStatuses('Submitted...');
 	displayFileList();
 
-	keepCheckingUploadStatus= true;
+	keepCheckingFileUploadStatus= true;
 	axios({
 		method:'POST',
 		url:'/betterfileupload',
-		timeout:90000,
+		timeout:1000*60*30, //30 minutes
 		data:formData,
-		headers:{
-			SESSIONID:sessionId
-		}
+		headers:{ SESSIONID:sessionId }
 	})
-	.then(
-		result => {
-			console.log(result);
-			keepCheckingUploadStatus = false;
-		}
-	)
-	.catch(
-		error => {
-			console.log(error);
-			keepCheckingUploadStatus = false;
-		}
-	);
+	.then( result => {console.log(result); })
+	.catch( error => {
+        console.log(error);
+        displayMessage('Upload Timed Out');
+        keepCheckingFileUploadStatus = false;
+    });
 	
-	timeout = setTimeout(checkUploadStatus,200);
+	//we dont want this to fire off before the file submission
+	//has a chance to start working, otherwise
+	//it could come back as already done (if you previously
+	//hit the submit button and uploaded the files,
+	//and you hit it again, the server-side upload will
+	//remove the pre-existing file first, but maybe
+	//not in time to accurately reflect this in the status request
+	setTimeout( fileUploadStatusRunner, 1000);
+
 };
 
 const doProceed = (result) => {
@@ -118,7 +187,7 @@ const doProceed = (result) => {
 	let uuid = result.data?(result.data?result.data.uuid:result.data):result;
 	console.log(uuid);
 	sessionId = uuid;
-}
+};
 
 const initialize = () => {
 	axios.get('/sessionid')
@@ -137,6 +206,6 @@ const initialize = () => {
 								+ theError;
 			}
 		)
-}
+};
 
 initialize();

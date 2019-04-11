@@ -92,11 +92,11 @@ public class FileUploadRestController {
 		}
 		FilesUploadsStatuses statuses = null;
 		if (ServletFileUpload.isMultipartContent(httpreq)) {
-			System.err.println("\tfile upload version 3 - request is multipart");
 			statuses = service.storeFiles(sessionId,httpreq);
 		} else {
 			throw new RuntimeException("Request is not multipart file");
 		};
+		System.err.println("Files Uploaded.");
 		return statuses;
 	}
 
