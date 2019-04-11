@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -66,39 +67,11 @@ public class FileUploadRestController {
 	 * Spring has alread intercepted / handled this before we arrive here.
 	 */
 	@PostMapping("/simplefileupload")
-	public SimpleFileUploadResponse uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
+	public FilesUploadsStatuses uploadFile(@RequestParam("file") MultipartFile[] files) throws IOException {
 
 		System.err.println("\n\nSTART of  /simplefileupload \n\n\n");
 
-		String name = service.storeFile(file);
-
-		return new SimpleFileUploadResponse(name,file.getSize());
-	}
-
-
-	@PostMapping("/betterfileupload")
-	public FilesUploadsStatuses uploadFile2(HttpServletRequest request, HttpServletResponse response) throws Exception {
-
-		System.err.println("\n\nSTART of  /betterfileupload");
-		
-		UUID uuid = UUID.randomUUID();
-		response.addHeader("SESSIONID", uuid.toString());
-
-		System.err.println("\tuuid="+uuid);
-		
-		FilesUploadsStatuses results = null;
-
-		if (ServletFileUpload.isMultipartContent(request)) {
-
-			System.err.println("\tfile upload version 3 - request is multipart");
-
-			results = service.storeFiles(uuid.toString(),request);
-					
-		} else {
-			throw new RuntimeException("/file3 request is not multipart file");
-		};
-	
-		return results;
+		return service.storeFiles(Arrays.asList(files));
 
 	}
 
@@ -110,31 +83,21 @@ public class FileUploadRestController {
 		return identifier;
 	}
 
-	@PostMapping("/muchbetterfileupload")
+	@PostMapping("/betterfileupload")
 	public FilesUploadsStatuses uploadFile3(HttpServletRequest httpreq, HttpServletResponse httpres) throws Exception {
-
-		System.err.println("\n\nSTART of  /muchbetterfileupload");
-		
-		
+		System.err.println("\n\nSTART of  /betterfileupload");
 		String sessionId = httpreq.getHeader("SESSIONID");
 		if (sessionId == null) {
 			throw new RuntimeException("Missing SESSIONID");
 		}
-
 		FilesUploadsStatuses statuses = null;
 		if (ServletFileUpload.isMultipartContent(httpreq)) {
-
 			System.err.println("\tfile upload version 3 - request is multipart");
-
 			statuses = service.storeFiles(sessionId,httpreq);
-	
-
 		} else {
-			throw new RuntimeException("/file3 request is not multipart file");
+			throw new RuntimeException("Request is not multipart file");
 		};
-	
 		return statuses;
-
 	}
 
 

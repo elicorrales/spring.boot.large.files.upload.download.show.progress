@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>File Upload Demo </title>
+	</head>
+	<body id="body">
+		<h1>Hello From File Upload Demo Project</h1>
+		<p/>
+		<div id="message"></div>
+		<p/>
+		<form>
+			<input id="fileSelector" type="file" name="file" accept="*" multiple />	
+			<p/>
+			<input type="submit" value="Submit" onclick="doSubmit(this.form,this,event)"/>
+		</form>
+		<hr>
+		<table border="1">
+			<thead> <tr><th>Name</th><th>Size</th><th>Status</th></tr></thead>
+			<tbody id="fileList"></tbody>
+		</table>
+	</body>
+	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.min.js"></script>
+	<script type="text/javascript" src="index.js"></script>
+</html>

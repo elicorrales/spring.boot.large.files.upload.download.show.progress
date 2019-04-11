@@ -7,7 +7,7 @@ import java.util.Map;
 
 public class FilesUploadsStatuses {
 
-	private String overallMessage;
+	private String overallMessage = "All Good";
 	
 	public String getOverallMessage() {
 		return overallMessage;

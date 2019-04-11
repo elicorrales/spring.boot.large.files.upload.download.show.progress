@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.stream.Stream;
 
 import javax.servlet.http.HttpServletRequest;
@@ -38,17 +39,28 @@ public class FileStorageService {
 		}
 	}
 
-	public String storeFile(MultipartFile file) throws IOException {
+	public FilesUploadsStatuses storeFiles(List<MultipartFile> files) throws IOException {
 
-		String fileName = file.getOriginalFilename();
-		if  (fileName.contains("..")) {
-			throw new FileStorageException("Sorry! This file contains invalid path: [ " + fileName + " ] ");
-		}
+		FilesUploadsStatuses statuses = new FilesUploadsStatuses();
+		
+		files.stream().forEach((file) -> {
+			String fileName = file.getOriginalFilename();
+			if  (fileName.contains("..")) {
+				String message = "Sorry! This file contains invalid path";
+				statuses.addFileStatus(fileName, message);
+			} else {
+				Path targetLocation = this.storageLocation.resolve(fileName);
+				try {
+					Files.copy(file.getInputStream(),targetLocation, StandardCopyOption.REPLACE_EXISTING);
+					statuses.addFileStatus(fileName, "Uploaded:"+file.getSize());
+				} catch (Exception e) {
+					e.printStackTrace();
+					statuses.addFileStatus(fileName, e.getMessage());
+				}
+			}
+		}); 
 
-		Path targetLocation = this.storageLocation.resolve(fileName);
-		Files.copy(file.getInputStream(),targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-		return fileName;
+		return statuses;
 	}
 
 
@@ -111,15 +123,20 @@ public class FileStorageService {
 		Path targetDirectory = this.storageLocation.resolve(sessionId);
 		
 		if (!Files.exists(this.storageLocation.resolve(sessionId))) {
-			statuses.setOverallMessage("Directory " + targetDirectory + " does not exist");
+			statuses.setOverallMessage("Directory " + targetDirectory + " does NOT EXIST");
 			return statuses;
 		}
 
 		File dir = targetDirectory.toFile();
-		Stream.of(dir.list()).forEach((f) -> {
-			File file = new File(dir.getPath()+"/"+f);
-			statuses.addFileStatus(file.getName(), "isfil:"+file.isFile() +" isdir:"+file.isDirectory()+" : "+file.length());
-		});
+		int numFiles = dir.list().length;
+		if (numFiles > 0 ) {
+			Stream.of(dir.list()).forEach((f) -> {
+				File file = new File(dir.getPath()+"/"+f);
+				statuses.addFileStatus(file.getName(), ""+file.length());
+			});
+		} else {
+			statuses.setOverallMessage("Directory " + targetDirectory + " is EMPTY");
+		}
 
 		return statuses;
 	}
