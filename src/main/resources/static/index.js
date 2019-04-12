@@ -4,6 +4,7 @@ var submittedFileList = {}
 var numberOfSubmittedFiles = 0;
 var keepCheckingFileUploadStatus = false;
 var timeout;
+var uploadStartedTimestamp = 0;
 
 const messageElem      = document.getElementById('message');
 const fileSelectorElem = document.getElementById('fileSelector');
@@ -35,8 +36,8 @@ const clearMessage = () => {
 	messageElem.innerHTML = '';
 };
 
-const displayMessage = (message) => {
-	messageElem.innerHTML = '<h2>' + message + '</h2>';
+const displayMessage = (alertType,message) => {
+	messageElem.innerHTML = '<div class="alert alert-' + alertType + '"><h2>' + message + '</h2></div>';
 };
 
 const progressBar = (curr,total) => {
@@ -109,15 +110,16 @@ const updateFilesStatuses = (list) => {
 			}
 		}
 	}
+	displayMessage('info','Elapsed Time Is ' + Math.round((Date.now()-uploadStartedTimestamp)/1000) + 's . . .');
     displayFileList();
 	if (numberOfReceivedStatuses>=numberOfSubmittedFiles && numberOfMatches==numberOfSubmittedFiles) {
 		keepCheckingFileUploadStatus = false;
-		displayMessage('All Files Uploaded');
+		displayMessage('success','All Files Uploaded  in ' + Math.round((Date.now()-uploadStartedTimestamp)/1000) + 's');
 		submitElem.disabled = false;
 		fileSelectorElem.disabled = false;
 		setFilesStatuses('Uploaded');
-        submittedFileList = {}
-        numberOfSubmittedFiles = 0;
+        //submittedFileList = {}
+        //numberOfSubmittedFiles = 0;
 		submitElem.disabled = false;
 		fileSelectorElem.files = null;
 	}
@@ -142,7 +144,7 @@ const checkUploadStatus = () =>{
 	.catch(
 		error => {
 			console.log(error);
-			displayMessage(error);
+			displayMessage('error',error);
 			keepCheckingFileUploadStatus = false;
 		}
 	);
@@ -178,7 +180,7 @@ const doSubmit = (event) => {
 	event.preventDefault();
 
 	if (isSubmittedFileListEmpty()) {
-		displayMessage('No Files Selected');
+		displayMessage('warning','No Files Selected');
 		return;
 	}
 
@@ -196,6 +198,7 @@ const doSubmit = (event) => {
 	displayFileList();
 
 	keepCheckingFileUploadStatus= true;
+	uploadStartedTimestamp =  Date.now();
 	axios({
 		method:'POST',
 		url:'/betterfileupload',
@@ -203,10 +206,12 @@ const doSubmit = (event) => {
 		data:formData,
 		headers:{ SESSIONID:sessionId }
 	})
-	.then( result => {console.log(result); })
+	.then( result => {
+		console.log(result);
+	})
 	.catch( error => {
         console.log(error);
-        displayMessage('Upload Timed Out');
+        displayMessage('error','Upload Timed Out');
         keepCheckingFileUploadStatus = false;
     });
 	
