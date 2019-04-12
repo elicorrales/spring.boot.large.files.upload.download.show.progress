@@ -9,8 +9,10 @@ const messageElem      = document.getElementById('message');
 const fileSelectorElem = document.getElementById('fileSelector');
 const fileListElem     = document.getElementById('fileList');
 const submitElem       = document.getElementById('submitBtn');
+const fileListTableElem= document.getElementById('fileListTable');
 
 submitElem.disabled = true;
+fileListTableElem.style.display = 'none';
 
 fileSelectorElem.addEventListener('change',() => {
 	submittedFileList = {};
@@ -37,17 +39,49 @@ const displayMessage = (message) => {
 	messageElem.innerHTML = '<h2>' + message + '</h2>';
 };
 
+const progressBar = (curr,total) => {
+    let percent = Math.round((curr/total)*100);
+/*
+    let html =
+     '<div class="progress">'
+        + '<div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%;">'
+        + '60%'
+        + '</div>'
+    + '</div>'
+    ;
+*/  
+
+    let html = 
+      '<div class="progress">'
+       + '<div '
+       + ' class="progress-bar ' + (percent<100?'progress-bar-info' : 'progress-bar-success') + '"'
+       + ' role="progressbar"'
+       + ' aria-valuenow="'+percent+'"'
+       + ' aria-valuemin="0"'
+       + ' aria-valuemax="100"'
+       + ' style="width:'+percent+'%;">'+percent+'%'
+       + '</div>'
+    + '</div>';
+
+    return html;
+};
+
 const displayFileList = () => {
-	if (submittedFileList==undefined) { return; }
+	if (isSubmittedFileListEmpty()) {
+		fileListTableElem.style.display = 'none';
+		return;
+	}
+	fileListTableElem.style.display = 'block';
 	let html = '';
 	for (key in submittedFileList) {
-		let file = submittedFileList[key];
-		let isFileUploaded = file.uploadedSize && file.uploadedSize==file.size?true:false;
-		html += (isFileUploaded?'<tr style="color:white;background-color:green">':'<tr>')
+        let file = submittedFileList[key];
+        let uploadedSize = file.uploadedSize?file.uploadedSize:0;
+		html += '<tr>'
 				+ '<td>' + file.name + '</td>'
-				+ '<td>' + (file.uploadedSize?file.uploadedSize:0) + '</td>'
+				+ '<td>' + uploadedSize + '</td>'
 				+ '<td>'+  file.size  + '</td>'
 				+ '<td>' + file.status + '</td>'
+				+ '<td>' + progressBar(uploadedSize,file.size) + '</td>'
 			+ '</tr>';
 	}
 	fileListElem.innerHTML = html;
@@ -108,6 +142,8 @@ const checkUploadStatus = () =>{
 	.catch(
 		error => {
 			console.log(error);
+			displayMessage(error);
+			keepCheckingFileUploadStatus = false;
 		}
 	);
 	
@@ -120,25 +156,28 @@ const fileUploadStatusRunner = () => {
 	}
 	setTimeout(()=>{
 		fileUploadStatusRunner();
-	},200);
+	},400);
 };
 
 const isSubmittedFileListEmpty = () => {
+	if (submittedFileList===undefined) return false;
 	for (var key in submittedFileList) {
 		if (submittedFileList.hasOwnProperty(key)) return false;
 	}
 	return true;
 };
 
+
 const doSubmit = (event) => {
 
 	submitElem.disabled = true;
 	fileSelectorElem.disabled = true;
+	fileListTableElem.style.display = 'block';
 	
 	clearMessage();
 	event.preventDefault();
 
-	if (!submittedFileList || isSubmittedFileListEmpty()) {
+	if (isSubmittedFileListEmpty()) {
 		displayMessage('No Files Selected');
 		return;
 	}

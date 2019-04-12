@@ -100,7 +100,7 @@ public class FileStorageService {
 				out = new FileOutputStream(targetLocation.toFile());
 				if (!item.isFormField()) {
 					System.err.println("\t\tbegin copying input file stream to output file stream....");
-					byte[] buffer = new byte[4096];
+					byte[] buffer = new byte[16384];
 					int bytesRead = 0;
 					while ((bytesRead=in.read(buffer))!=-1) {
 						out.write(buffer, 0, bytesRead);

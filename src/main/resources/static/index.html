@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
+		<link rel="stylesheet" href="bootstrap.3.3.7.min.css" />
 		<title>File Upload Demo </title>
 	</head>
 	<body id="body">
@@ -9,15 +10,17 @@
 		<div id="message"></div>
 		<p/>
 		<form>
-			<input id="fileSelector" type="file" name="file" accept="*" multiple />	
+			<input id="fileSelector" type="file" name="file" accept="*"  class="form-control form-control-lg form-control-file" multiple autofocus/>	
 			<p/>
-			<input id="submitBtn" type="submit" value="Submit" onclick="doSubmit(event)"/>
+			<button id="submitBtn" type="button" class="btn btn-primary" onclick="doSubmit(event)">Upload Files</button>
 		</form>
 		<hr>
-		<table border="1">
-			<thead> <tr><th>Name</th><th>Uploaded</th><th>Size</th><th>Status</th></tr></thead>
-			<tbody id="fileList"></tbody>
-		</table>
+		<div id="fileListTable">
+			<table border="1" style="width:100%">
+				<thead> <tr><th>Name</th><th>Uploaded</th><th>Size</th><th>Status</th><th style="width:50%">Progress</th></tr></thead>
+				<tbody id="fileList"></tbody>
+			</table>
+		</div>
 	</body>
 	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.min.js"></script>
 	<script type="text/javascript" src="index.js"></script>
